@@ -1369,10 +1369,14 @@ public class Gen3RomHandler extends AbstractGBRomHandler {
         for (int i = 0; i < numOfEntries; i++) {
             // min, max, species, species
             Encounter enc = new Encounter();
-            enc.level = rom[dataOffset + i * 4];
-            enc.maxLevel = rom[dataOffset + i * 4 + 1];
+            int realIndex = i;
+            if (romEntry.romCode.equals("MBDN") && i >= 4) {
+                realIndex ++;
+            }
+            enc.level = rom[dataOffset + realIndex * 4];
+            enc.maxLevel = rom[dataOffset + realIndex * 4 + 1];
             try {
-                enc.pokemon = pokesInternal[readWord(dataOffset + i * 4 + 2)];
+                enc.pokemon = pokesInternal[readWord(dataOffset + realIndex * 4 + 2)];
             } catch (ArrayIndexOutOfBoundsException ex) {
                 throw ex;
             }
