@@ -29,6 +29,8 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -45,6 +47,7 @@ import com.dabomstew.pkrandom.FileFunctions;
 import com.dabomstew.pkrandom.GFXFunctions;
 import com.dabomstew.pkrandom.MiscTweak;
 import com.dabomstew.pkrandom.RomFunctions;
+import com.dabomstew.pkrandom.Utils;
 import com.dabomstew.pkrandom.constants.GBConstants;
 import com.dabomstew.pkrandom.constants.Gen2Constants;
 import com.dabomstew.pkrandom.constants.GlobalConstants;
@@ -54,13 +57,16 @@ import com.dabomstew.pkrandom.pokemon.EncounterSet;
 import com.dabomstew.pkrandom.pokemon.Evolution;
 import com.dabomstew.pkrandom.pokemon.EvolutionType;
 import com.dabomstew.pkrandom.pokemon.ExpCurve;
+import com.dabomstew.pkrandom.pokemon.FieldTM;
 import com.dabomstew.pkrandom.pokemon.IngameTrade;
 import com.dabomstew.pkrandom.pokemon.ItemList;
+import com.dabomstew.pkrandom.pokemon.ItemLocation;
 import com.dabomstew.pkrandom.pokemon.Move;
 import com.dabomstew.pkrandom.pokemon.MoveLearnt;
 import com.dabomstew.pkrandom.pokemon.Pokemon;
 import com.dabomstew.pkrandom.pokemon.Trainer;
 import com.dabomstew.pkrandom.pokemon.TrainerPokemon;
+
 import compressors.Gen2Decmp;
 
 public class Gen2RomHandler extends AbstractGBCRomHandler {
@@ -97,6 +103,7 @@ public class Gen2RomHandler extends AbstractGBCRomHandler {
     private static class RomEntry {
         private String name;
         private String romCode;
+        private String hash;
         private int version, nonJapanese;
         private String extraTableFile;
         private boolean isCrystal;
@@ -191,6 +198,8 @@ public class Gen2RomHandler extends AbstractGBCRomHandler {
                             current.version = parseRIInt(r[1]);
                         } else if (r[0].equals("NonJapanese")) {
                             current.nonJapanese = parseRIInt(r[1]);
+                        } else if (r[0].equals("MD5Hash")) {
+                            current.hash = r[1];
                         } else if (r[0].equals("Type")) {
                             if (r[1].equalsIgnoreCase("Crystal")) {
                                 current.isCrystal = true;
@@ -274,7 +283,7 @@ public class Gen2RomHandler extends AbstractGBCRomHandler {
     private Move[] moves;
     private boolean havePatchedFleeing;
     private String[] itemNames;
-    private List<Integer> itemOffs;
+    private List<ItemLocationInner> itemOffs;
     private String[][] mapNames;
     private String[] landmarkNames;
     private boolean isVietCrystal;
@@ -289,12 +298,13 @@ public class Gen2RomHandler extends AbstractGBCRomHandler {
         if (romSize < GBConstants.minRomSize || romSize > GBConstants.maxRomSize) {
             return false; // size check
         }
-        return checkRomEntry(rom) != null; // so it's OK if it's a valid ROM
+        return checkRomEntry(rom, romSize) != null; // so it's OK if it's a
+                                                    // valid ROM
     }
 
     @Override
     public void loadedRom() {
-        romEntry = checkRomEntry(this.rom);
+        romEntry = checkRomEntry(this.rom, this.rom.length);
         clearTextTables();
         readTextTable("gameboy_jap");
         if (romEntry.extraTableFile != null && romEntry.extraTableFile.equalsIgnoreCase("none") == false) {
@@ -319,7 +329,7 @@ public class Gen2RomHandler extends AbstractGBCRomHandler {
         nonBadItems = Gen2Constants.nonBadItems.copy();
     }
 
-    private static RomEntry checkRomEntry(byte[] rom) {
+    private static RomEntry checkRomEntry(byte[] rom, int romLength) {
         int version = rom[GBConstants.versionOffset] & 0xFF;
         int nonjap = rom[GBConstants.jpFlagOffset] & 0xFF;
         // Check for specific CRC first
@@ -333,7 +343,19 @@ public class Gen2RomHandler extends AbstractGBCRomHandler {
         // Now check for non-specific-CRC entries
         for (RomEntry re : roms) {
             if (romCode(rom, re.romCode) && re.version == version && re.nonJapanese == nonjap && re.crcInHeader == -1) {
-                return re;
+                if (re.hash != null && rom.length == romLength) {
+                    try {
+                        MessageDigest md = MessageDigest.getInstance("MD5");
+                        byte[] digest = md.digest(rom);
+                        String hash = Utils.toHexString(digest);
+                        if (hash.equalsIgnoreCase(re.hash)) {
+                            return re;
+                        }
+                    } catch (NoSuchAlgorithmException e) {
+                    }
+                } else {
+                    return re;
+                }
             }
         }
         // Not found
@@ -524,7 +546,8 @@ public class Gen2RomHandler extends AbstractGBCRomHandler {
         if (romEntry.getValue("CanChangeStarterText") > 0) {
             int[] starterTextOffsets = romEntry.arrayEntries.get("StarterTextOffsets");
             for (int i = 0; i < 3 && i < starterTextOffsets.length; i++) {
-                writeVariableLengthString(String.format("%s?\\e", newStarters.get(i).name), starterTextOffsets[i], true);
+                writeVariableLengthString(String.format("%s?\\e", newStarters.get(i).name), starterTextOffsets[i],
+                        true);
             }
         }
         return true;
@@ -553,7 +576,7 @@ public class Gen2RomHandler extends AbstractGBCRomHandler {
     }
 
     @Override
-    public List<EncounterSet> getEncounters(boolean useTimeOfDay) {
+    public List<EncounterSet> getEncounters(boolean useTimeOfDay, boolean condenseSlots) {
         int offset = romEntry.getValue("WildPokemonOffset");
         List<EncounterSet> areas = new ArrayList<EncounterSet>();
         offset = readLandEncounters(offset, areas, useTimeOfDay); // Johto
@@ -662,7 +685,8 @@ public class Gen2RomHandler extends AbstractGBCRomHandler {
                         Encounter enc = new Encounter();
                         enc.level = rom[offset + 5 + (i * Gen2Constants.landEncounterSlots * 2) + (j * 2)] & 0xFF;
                         enc.maxLevel = 0;
-                        enc.pokemon = pokes[rom[offset + 5 + (i * Gen2Constants.landEncounterSlots * 2) + (j * 2) + 1] & 0xFF];
+                        enc.pokemon = pokes[rom[offset + 5 + (i * Gen2Constants.landEncounterSlots * 2) + (j * 2) + 1]
+                                & 0xFF];
                         encset.encounters.add(enc);
                     }
                     areas.add(encset);
@@ -708,7 +732,7 @@ public class Gen2RomHandler extends AbstractGBCRomHandler {
     }
 
     @Override
-    public void setEncounters(boolean useTimeOfDay, List<EncounterSet> encounters) {
+    public void setEncounters(boolean useTimeOfDay, boolean condenseSlots, List<EncounterSet> encounters) {
         if (!havePatchedFleeing) {
             patchFleeing();
         }
@@ -793,8 +817,8 @@ public class Gen2RomHandler extends AbstractGBCRomHandler {
                     EncounterSet encset = areas.next();
                     Iterator<Encounter> encountersHere = encset.encounters.iterator();
                     for (int j = 0; j < Gen2Constants.landEncounterSlots; j++) {
-                        rom[offset + 5 + (i * Gen2Constants.landEncounterSlots * 2) + (j * 2) + 1] = (byte) encountersHere
-                                .next().pokemon.number;
+                        rom[offset + 5 + (i * Gen2Constants.landEncounterSlots * 2) + (j * 2)
+                                + 1] = (byte) encountersHere.next().pokemon.number;
                     }
                 }
             } else {
@@ -803,8 +827,8 @@ public class Gen2RomHandler extends AbstractGBCRomHandler {
                 for (int i = 0; i < 3; i++) {
                     Iterator<Encounter> encountersHere = encset.encounters.iterator();
                     for (int j = 0; j < Gen2Constants.landEncounterSlots; j++) {
-                        rom[offset + 5 + (i * Gen2Constants.landEncounterSlots * 2) + (j * 2) + 1] = (byte) encountersHere
-                                .next().pokemon.number;
+                        rom[offset + 5 + (i * Gen2Constants.landEncounterSlots * 2) + (j * 2)
+                                + 1] = (byte) encountersHere.next().pokemon.number;
                     }
                 }
             }
@@ -993,6 +1017,7 @@ public class Gen2RomHandler extends AbstractGBCRomHandler {
     @Override
     public List<Integer> getMovesBannedFromLevelup() {
         // ban thief because trainers are broken with it
+        // new feb 2020: ban beat up because of the glitch
         return Gen2Constants.bannedLevelupMoves;
     }
 
@@ -1168,8 +1193,8 @@ public class Gen2RomHandler extends AbstractGBCRomHandler {
         for (Map.Entry<Pokemon, boolean[]> compatEntry : compatData.entrySet()) {
             Pokemon pkmn = compatEntry.getKey();
             boolean[] flags = compatEntry.getValue();
-            int baseStatsOffset = romEntry.getValue("PokemonStatsOffset") + (pkmn.number - 1)
-                    * Gen2Constants.baseStatsEntrySize;
+            int baseStatsOffset = romEntry.getValue("PokemonStatsOffset")
+                    + (pkmn.number - 1) * Gen2Constants.baseStatsEntrySize;
             for (int j = 0; j < 8; j++) {
                 if (!romEntry.isCrystal || j != 7) {
                     rom[baseStatsOffset + Gen2Constants.bsTMHMCompatOffset + j] = getByteFromFlags(flags, j * 8 + 1);
@@ -1263,8 +1288,8 @@ public class Gen2RomHandler extends AbstractGBCRomHandler {
         for (Map.Entry<Pokemon, boolean[]> compatEntry : compatData.entrySet()) {
             Pokemon pkmn = compatEntry.getKey();
             boolean[] flags = compatEntry.getValue();
-            int baseStatsOffset = romEntry.getValue("PokemonStatsOffset") + (pkmn.number - 1)
-                    * Gen2Constants.baseStatsEntrySize;
+            int baseStatsOffset = romEntry.getValue("PokemonStatsOffset")
+                    + (pkmn.number - 1) * Gen2Constants.baseStatsEntrySize;
             int origMtByte = rom[baseStatsOffset + Gen2Constants.bsMTCompatOffset] & 0xFF;
             int mtByte = origMtByte & 0x01;
             for (int j = 1; j <= 3; j++) {
@@ -1375,7 +1400,8 @@ public class Gen2RomHandler extends AbstractGBCRomHandler {
                             evol.type = EvolutionType.LEVEL;
                             evol.extraInfo = 40; // level
                             logEvoChangeLevel(evol.from.name, evol.to.name, 40);
-                        } else if (evol.from.number == Gen2Constants.poliwhirlIndex || evol.type == EvolutionType.TRADE) {
+                        } else if (evol.from.number == Gen2Constants.poliwhirlIndex
+                                || evol.type == EvolutionType.TRADE) {
                             // Poliwhirl or any of the original 4 trade evos
                             // Level 37
                             evol.type = EvolutionType.LEVEL;
@@ -1524,6 +1550,11 @@ public class Gen2RomHandler extends AbstractGBCRomHandler {
     @Override
     public int maxSumOfTrainerNameLengths() {
         return romEntry.getValue("MaxSumOfTrainerNameLengths");
+    }
+
+    @Override
+    public List<Character> getBannedTrainerNameCharacters() {
+        return Arrays.asList(new Character[] { '9' });
     }
 
     @Override
@@ -1752,7 +1783,7 @@ public class Gen2RomHandler extends AbstractGBCRomHandler {
     }
 
     private void preprocessMaps() {
-        itemOffs = new ArrayList<Integer>();
+        itemOffs = new ArrayList<ItemLocationInner>();
 
         int mhOffset = romEntry.getValue("MapHeaders");
         int mapGroupCount = Gen2Constants.mapGroupCount;
@@ -1776,6 +1807,28 @@ public class Gen2RomHandler extends AbstractGBCRomHandler {
                 offset += 9;
                 map++;
             }
+        }
+    }
+    
+    private class ItemLocationInner {
+        private int mapBank;
+        private int mapNumber;
+        private int x;
+        private int y;
+        private int offset;
+        private boolean hidden;
+        public ItemLocationInner(int mapBank, int mapNumber, int x, int y, int offset, boolean hidden) {
+            super();
+            this.mapBank = mapBank;
+            this.mapNumber = mapNumber;
+            this.x = x;
+            this.y = y;
+            this.offset = offset;
+            this.hidden = hidden;
+        }
+        @Override
+        public String toString() {
+            return String.format("%s (%d.%d) @ %d, %d (%s)", mapNames[mapBank][mapNumber], mapBank, mapNumber, x, y, hidden ? "hidden" : "visible");
         }
     }
 
@@ -1820,7 +1873,7 @@ public class Gen2RomHandler extends AbstractGBCRomHandler {
                 int spPointer = readWord(ehOffset + sp * 5 + 3);
                 int spOffset = calculateOffset(ehBank, spPointer);
                 // item is at spOffset+2 (first two bytes are the flag id)
-                itemOffs.add(spOffset + 2);
+                itemOffs.add(new ItemLocationInner(mapBank, mapNumber, rom[ehOffset + sp*5 + 1]&0xFF, rom[ehOffset + sp*5]&0xFF, spOffset + 2, true));
             }
         }
         // now skip past them
@@ -1837,7 +1890,7 @@ public class Gen2RomHandler extends AbstractGBCRomHandler {
                 int pPointer = readWord(ehOffset + p * 13 + 9);
                 int pOffset = calculateOffset(ehBank, pPointer);
                 // item is at the pOffset for non-hidden items
-                itemOffs.add(pOffset);
+                itemOffs.add(new ItemLocationInner(mapBank, mapNumber, (rom[ehOffset + p*13 + 2]&0xFF)-4, (rom[ehOffset + p*13 + 1]&0xFF)-4, pOffset, false));
             }
         }
 
@@ -1849,11 +1902,11 @@ public class Gen2RomHandler extends AbstractGBCRomHandler {
     }
 
     @Override
-    public List<Integer> getCurrentFieldTMs() {
-        List<Integer> fieldTMs = new ArrayList<Integer>();
+    public List<FieldTM> getCurrentFieldTMs() {
+        List<FieldTM> fieldTMs = new ArrayList<FieldTM>();
 
-        for (int offset : itemOffs) {
-            int itemHere = rom[offset] & 0xFF;
+        for (ItemLocationInner il : itemOffs) {
+            int itemHere = rom[il.offset] & 0xFF;
             if (Gen2Constants.allowedItems.isTM(itemHere)) {
                 int thisTM = 0;
                 if (itemHere >= Gen2Constants.tmBlockOneIndex
@@ -1869,9 +1922,10 @@ public class Gen2RomHandler extends AbstractGBCRomHandler {
                     thisTM = itemHere - Gen2Constants.tmBlockThreeIndex + 1 + Gen2Constants.tmBlockOneSize
                             + Gen2Constants.tmBlockTwoSize; // TM block 3 offset
                 }
+                FieldTM tmObj = new FieldTM(il.toString(), thisTM);
                 // hack for the bug catching contest repeat TM28
-                if (fieldTMs.contains(thisTM) == false) {
-                    fieldTMs.add(thisTM);
+                if (fieldTMs.contains(tmObj) == false) {
+                    fieldTMs.add(tmObj);
                 }
             }
         }
@@ -1883,12 +1937,12 @@ public class Gen2RomHandler extends AbstractGBCRomHandler {
         Iterator<Integer> iterTMs = fieldTMs.iterator();
         int[] givenTMs = new int[256];
 
-        for (int offset : itemOffs) {
-            int itemHere = rom[offset] & 0xFF;
+        for (ItemLocationInner il : itemOffs) {
+            int itemHere = rom[il.offset] & 0xFF;
             if (Gen2Constants.allowedItems.isTM(itemHere)) {
                 // Cache replaced TMs to duplicate bug catching contest TM
                 if (givenTMs[itemHere] != 0) {
-                    rom[offset] = (byte) givenTMs[itemHere];
+                    rom[il.offset] = (byte) givenTMs[itemHere];
                 } else {
                     // Replace this with a TM from the list
                     int tm = iterTMs.next();
@@ -1902,20 +1956,20 @@ public class Gen2RomHandler extends AbstractGBCRomHandler {
                                 - Gen2Constants.tmBlockTwoSize;
                     }
                     givenTMs[itemHere] = tm;
-                    rom[offset] = (byte) tm;
+                    rom[il.offset] = (byte) tm;
                 }
             }
         }
     }
 
     @Override
-    public List<Integer> getRegularFieldItems() {
-        List<Integer> fieldItems = new ArrayList<Integer>();
+    public List<ItemLocation> getRegularFieldItems() {
+        List<ItemLocation> fieldItems = new ArrayList<ItemLocation>();
 
-        for (int offset : itemOffs) {
-            int itemHere = rom[offset] & 0xFF;
+        for (ItemLocationInner il : itemOffs) {
+            int itemHere = rom[il.offset] & 0xFF;
             if (Gen2Constants.allowedItems.isAllowed(itemHere) && !(Gen2Constants.allowedItems.isTM(itemHere))) {
-                fieldItems.add(itemHere);
+                fieldItems.add(new ItemLocation(il.toString(), itemHere));
             }
         }
         return fieldItems;
@@ -1925,11 +1979,11 @@ public class Gen2RomHandler extends AbstractGBCRomHandler {
     public void setRegularFieldItems(List<Integer> items) {
         Iterator<Integer> iterItems = items.iterator();
 
-        for (int offset : itemOffs) {
-            int itemHere = rom[offset] & 0xFF;
+        for (ItemLocationInner il : itemOffs) {
+            int itemHere = rom[il.offset] & 0xFF;
             if (Gen2Constants.allowedItems.isAllowed(itemHere) && !(Gen2Constants.allowedItems.isTM(itemHere))) {
                 // Replace it
-                rom[offset] = (byte) (iterItems.next().intValue());
+                rom[il.offset] = (byte) (iterItems.next().intValue());
             }
         }
 

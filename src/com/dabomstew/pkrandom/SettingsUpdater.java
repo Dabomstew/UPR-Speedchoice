@@ -29,7 +29,8 @@ package com.dabomstew.pkrandom;
 import java.nio.ByteBuffer;
 import java.util.zip.CRC32;
 
-import javax.xml.bind.DatatypeConverter;
+import com.dabomstew.pkrandom.Settings.BaseStatisticsMod;
+import com.dabomstew.pkrandom.Settings.StartersMod;
 
 public class SettingsUpdater {
 
@@ -47,7 +48,7 @@ public class SettingsUpdater {
      * @return The updated config string to be applied
      */
     public String update(int oldVersion, String configString) {
-        byte[] data = DatatypeConverter.parseBase64Binary(configString);
+        byte[] data = Utils.base64ToBytes(configString);
         this.dataBlock = new byte[200];
         this.actualDataLength = data.length;
         System.arraycopy(data, 0, this.dataBlock, 0, this.actualDataLength);
@@ -240,6 +241,44 @@ public class SettingsUpdater {
             // add space for the trainer level modifier
             insertExtraByte(35, (byte) 50); // 50 in the settings file = +0% after adjustment
         }
+        
+        if(oldVersion < 173) {
+            // 172 to 173: rejig base stats/starter bytes to allow for more values in less space
+            // also add 1 more byte for base stat % slider
+            
+            // base stat conversion
+            int baseStatValue = BaseStatisticsMod.UNCHANGED.ordinal();
+            if((dataBlock[1] & 0x02) != 0) {
+                baseStatValue = BaseStatisticsMod.RANDOM.ordinal();
+            }
+            if((dataBlock[1] & 0x04) != 0) {
+                baseStatValue = BaseStatisticsMod.SHUFFLE.ordinal();
+            }
+            // keep bits 0, 4, 5 and write in the new value for base stats
+            dataBlock[1] = (byte) ((dataBlock[1] & 0x31) | (baseStatValue << 1));
+            
+            // starter conversion
+            int starterValue = StartersMod.UNCHANGED.ordinal();
+            if((dataBlock[4] & 0x01) != 0) {
+                starterValue = StartersMod.CUSTOM.ordinal();
+            }
+            if((dataBlock[4] & 0x02) != 0) {
+                starterValue = StartersMod.COMPLETELY_RANDOM.ordinal();
+            }
+            if((dataBlock[4] & 0x08) != 0) {
+                starterValue = StartersMod.RANDOM_WITH_TWO_EVOLUTIONS.ordinal();
+            }
+            // new starter byte: startervalue in bits 0-2, move 4-5 down to 3-4, zero the rest
+            dataBlock[4] = (byte) (starterValue | ((dataBlock[4] & 0x30) >>> 1));
+            
+            // add the extra base stat slider byte
+            insertExtraByte(36, (byte) 0);
+        }
+        
+        if(oldVersion < 174) {
+            // add the extra wild pokemon byte, turn cea reasonable slots only on if cea on
+            insertExtraByte(37, (byte) ((dataBlock[15] & 1) << 1));
+        }
 
         // fix checksum
         CRC32 checksum = new CRC32();
@@ -252,7 +291,7 @@ public class SettingsUpdater {
         // have to make a new byte array to convert to base64
         byte[] finalConfigString = new byte[actualDataLength];
         System.arraycopy(dataBlock, 0, finalConfigString, 0, actualDataLength);
-        return DatatypeConverter.printBase64Binary(finalConfigString);
+        return Utils.bytesToBase64(finalConfigString);
     }
 
     private static byte getRemappedByte(byte old, int[] oldIndexes) {

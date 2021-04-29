@@ -34,8 +34,6 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.zip.CRC32;
 
-import javax.xml.bind.DatatypeConverter;
-
 import com.dabomstew.pkrandom.pokemon.GenRestrictions;
 import com.dabomstew.pkrandom.pokemon.Pokemon;
 import com.dabomstew.pkrandom.romhandlers.Gen1RomHandler;
@@ -46,9 +44,9 @@ import com.dabomstew.pkrandom.romhandlers.RomHandler;
 
 public class Settings {
 
-    public static final int VERSION = 172;
+    public static final int VERSION = 174;
 
-    public static final int LENGTH_OF_SETTINGS_DATA = 36;
+    public static final int LENGTH_OF_SETTINGS_DATA = 38;
 
     private CustomNamesSet customNames;
 
@@ -64,13 +62,16 @@ public class Settings {
     private boolean limitPokemon;
 
     public enum BaseStatisticsMod {
-        UNCHANGED, SHUFFLE, RANDOM,
+        UNCHANGED, SHUFFLE, RANDOM, RANDOMBST, RANDOMBSTPERC, EQUALIZE,
     }
 
     private BaseStatisticsMod baseStatisticsMod = BaseStatisticsMod.UNCHANGED;
     private boolean standardizeEXPCurves;
     private boolean baseStatsFollowEvolutions;
     private boolean updateBaseStats;
+    private int baseStatRange = 0;
+    private boolean dontRandomizeRatio;
+    private boolean evosBuffStats;
 
     public enum AbilitiesMod {
         UNCHANGED, RANDOMIZE
@@ -83,7 +84,7 @@ public class Settings {
     private boolean banNegativeAbilities;
 
     public enum StartersMod {
-        UNCHANGED, CUSTOM, COMPLETELY_RANDOM, RANDOM_WITH_TWO_EVOLUTIONS
+        UNCHANGED, CUSTOM, COMPLETELY_RANDOM, RANDOM_WITH_TWO_EVOLUTIONS, RANDOM_WITH_ONE_EVOLUTION, RANDOM_WITH_NO_EVOLUTIONS
     }
 
     private StartersMod startersMod = StartersMod.UNCHANGED;
@@ -93,6 +94,8 @@ public class Settings {
     private int[] customStarters = new int[3];
     private boolean randomizeStartersHeldItems;
     private boolean banBadRandomStarterHeldItems;
+    private boolean banLegendaryStarters;
+    private boolean onlyLegendaryStarters;
 
     public enum TypesMod {
         UNCHANGED, RANDOM_FOLLOW_EVOLUTIONS, COMPLETELY_RANDOM
@@ -163,6 +166,8 @@ public class Settings {
     private int minimumCatchRateLevel = 1;
     private boolean randomizeWildPokemonHeldItems;
     private boolean banBadRandomWildPokemonHeldItems;
+    private boolean condenseEncounterSlots;
+    private boolean catchEmAllReasonableSlotsOnly;
 
     public enum StaticPokemonMod {
         UNCHANGED, RANDOM_MATCHING, COMPLETELY_RANDOM
@@ -257,9 +262,9 @@ public class Settings {
                 randomizeTrainerClassNames, makeEvolutionsEasier));
 
         // 1: pokemon base stats & abilities
-        out.write(makeByteSelected(baseStatsFollowEvolutions, baseStatisticsMod == BaseStatisticsMod.RANDOM,
-                baseStatisticsMod == BaseStatisticsMod.SHUFFLE, baseStatisticsMod == BaseStatisticsMod.UNCHANGED,
-                standardizeEXPCurves, updateBaseStats));
+        out.write(makeByteSelected(baseStatsFollowEvolutions, (baseStatisticsMod.ordinal() & 1) != 0,
+                (baseStatisticsMod.ordinal() & 2) != 0, (baseStatisticsMod.ordinal() & 4) != 0,
+                standardizeEXPCurves, updateBaseStats, dontRandomizeRatio, evosBuffStats));
 
         // 2: pokemon types & more general options
         out.write(makeByteSelected(typesMod == TypesMod.RANDOM_FOLLOW_EVOLUTIONS,
@@ -272,9 +277,9 @@ public class Settings {
                 allowWonderGuard, abilitiesFollowEvolutions, banTrappingAbilities, banNegativeAbilities));
 
         // 4: starter pokemon stuff
-        out.write(makeByteSelected(startersMod == StartersMod.CUSTOM, startersMod == StartersMod.COMPLETELY_RANDOM,
-                startersMod == StartersMod.UNCHANGED, startersMod == StartersMod.RANDOM_WITH_TWO_EVOLUTIONS,
-                randomizeStartersHeldItems, banBadRandomStarterHeldItems));
+        out.write(makeByteSelected((startersMod.ordinal() & 1) != 0, (startersMod.ordinal() & 2) != 0,
+                (startersMod.ordinal() & 4) != 0,
+                randomizeStartersHeldItems, banBadRandomStarterHeldItems, banLegendaryStarters, onlyLegendaryStarters));
 
         // @5 dropdowns
         write2ByteInt(out, customStarters[0] - 1);
@@ -383,6 +388,13 @@ public class Settings {
 
         // @ 35 trainer pokemon level modifier
         out.write((trainersLevelModified ? 0x80 : 0) | (trainersLevelModifier+50));
+        
+        // @ 36 base stats range slider value
+        out.write(baseStatRange);
+        
+        // @ 37 wild pokemon 3
+        // new in 174
+        out.write(makeByteSelected(condenseEncounterSlots, catchEmAllReasonableSlotsOnly));
 
         try {
             byte[] romName = this.romName.getBytes("US-ASCII");
@@ -404,11 +416,11 @@ public class Settings {
         } catch (IOException e) {
         }
 
-        return DatatypeConverter.printBase64Binary(out.toByteArray());
+        return Utils.bytesToBase64(out.toByteArray());
     }
 
     public static Settings fromString(String settingsString) throws UnsupportedEncodingException {
-        byte[] data = DatatypeConverter.parseBase64Binary(settingsString);
+        byte[] data = Utils.base64ToBytes(settingsString);
         checkChecksum(data);
 
         Settings settings = new Settings();
@@ -421,13 +433,12 @@ public class Settings {
         settings.setRandomizeTrainerClassNames(restoreState(data[0], 4));
         settings.setMakeEvolutionsEasier(restoreState(data[0], 5));
 
-        settings.setBaseStatisticsMod(restoreEnum(BaseStatisticsMod.class, data[1], 3, // UNCHANGED
-                2, // SHUFFLE
-                1 // RANDOM
-        ));
+        settings.setBaseStatisticsMod(restoreEnumByOrdinal(BaseStatisticsMod.class, data[1], 1, 3));
         settings.setStandardizeEXPCurves(restoreState(data[1], 4));
         settings.setBaseStatsFollowEvolutions(restoreState(data[1], 0));
         settings.setUpdateBaseStats(restoreState(data[1], 5));
+        settings.setDontRandomizeRatio(restoreState(data[1], 6));
+        settings.setEvosBuffStats(restoreState(data[1], 7));
 
         settings.setTypesMod(restoreEnum(TypesMod.class, data[2], 2, // UNCHANGED
                 0, // RANDOM_FOLLOW_EVOLUTIONS
@@ -445,13 +456,11 @@ public class Settings {
         settings.setBanTrappingAbilities(restoreState(data[3], 4));
         settings.setBanNegativeAbilities(restoreState(data[3], 5));
 
-        settings.setStartersMod(restoreEnum(StartersMod.class, data[4], 2, // UNCHANGED
-                0, // CUSTOM
-                1, // COMPLETELY_RANDOM
-                3 // RANDOM_WITH_TWO_EVOLUTIONS
-        ));
-        settings.setRandomizeStartersHeldItems(restoreState(data[4], 4));
-        settings.setBanBadRandomStarterHeldItems(restoreState(data[4], 5));
+        settings.setStartersMod(restoreEnumByOrdinal(StartersMod.class, data[4], 0, 3));
+        settings.setRandomizeStartersHeldItems(restoreState(data[4], 3));
+        settings.setBanBadRandomStarterHeldItems(restoreState(data[4], 4));
+        settings.setBanLegendaryStarters(restoreState(data[4], 5));
+        settings.setOnlyLegendaryStarters(restoreState(data[4], 6));
 
         settings.setCustomStarters(new int[] { FileFunctions.read2ByteInt(data, 5) + 1,
                 FileFunctions.read2ByteInt(data, 7) + 1, FileFunctions.read2ByteInt(data, 9) + 1 });
@@ -579,6 +588,11 @@ public class Settings {
 
         settings.setTrainersLevelModified(restoreState(data[35], 7));
         settings.setTrainersLevelModifier((data[35] & 0x7F) - 50);
+        
+        settings.setBaseStatRange(data[36] & 0xFF);
+        
+        settings.setCondenseEncounterSlots(restoreState(data[37], 0));
+        settings.setCatchEmAllReasonableSlotsOnly(restoreState(data[37], 1));
 
         int romNameLength = data[LENGTH_OF_SETTINGS_DATA] & 0xFF;
         String romName = new String(data, LENGTH_OF_SETTINGS_DATA + 1, romNameLength, "US-ASCII");
@@ -855,7 +869,34 @@ public class Settings {
         this.updateBaseStats = updateBaseStats;
         return this;
     }
+    
+    public int getBaseStatRange() {
+    	return baseStatRange;
+    }
+    
+    public Settings setBaseStatRange(int baseStatRange) {
+    	this.baseStatRange = baseStatRange;
+    	return this;
+    }
+    
+    public boolean isDontRandomizeRatio() {
+    	return dontRandomizeRatio;
+    }
+    
+    public Settings setDontRandomizeRatio(boolean DontRandomizeRatio) {
+    	this.dontRandomizeRatio = DontRandomizeRatio;
+    	return this;
+    }
 
+    public boolean isEvosBuffStats() {
+    	return evosBuffStats;
+    }
+    
+    public Settings setEvosBuffStats(boolean evosBuffStats) {
+    	this.evosBuffStats = evosBuffStats;
+    	return this;
+    }
+    
     public AbilitiesMod getAbilitiesMod() {
         return abilitiesMod;
     }
@@ -945,6 +986,24 @@ public class Settings {
         return this;
     }
 
+    public boolean isBanLegendaryStarters() {
+    	return banLegendaryStarters;
+    }
+    
+    public Settings setBanLegendaryStarters(boolean banLegendaryStarters) {
+    	this.banLegendaryStarters = banLegendaryStarters;
+    	return this;
+    }
+    
+    public boolean isOnlyLegendaryStarters() {
+    	return onlyLegendaryStarters;
+    }
+    
+    public Settings setOnlyLegendaryStarters(boolean onlyLegendaryStarters) {
+    	this.onlyLegendaryStarters = onlyLegendaryStarters;
+    	return this;
+    }
+    
     public TypesMod getTypesMod() {
         return typesMod;
     }
@@ -1510,6 +1569,24 @@ public class Settings {
         return this;
     }
 
+    public boolean isCondenseEncounterSlots() {
+        return condenseEncounterSlots;
+    }
+
+    public Settings setCondenseEncounterSlots(boolean condenseEncounterSlots) {
+        this.condenseEncounterSlots = condenseEncounterSlots;
+        return this;
+    }
+
+    public boolean isCatchEmAllReasonableSlotsOnly() {
+        return catchEmAllReasonableSlotsOnly;
+    }
+
+    public Settings setCatchEmAllReasonableSlotsOnly(boolean catchEmAllReasonableSlotsOnly) {
+        this.catchEmAllReasonableSlotsOnly = catchEmAllReasonableSlotsOnly;
+        return this;
+    }
+
     private static int makeByteSelected(boolean... bools) {
         if (bools.length > 8) {
             throw new IllegalArgumentException("Can't set more than 8 bits in a byte!");
@@ -1551,6 +1628,17 @@ public class Settings {
             i++;
         }
         return getEnum(clazz, bools);
+    }
+    
+    public static <E extends Enum<E>> E restoreEnumByOrdinal(Class<E> clazz, byte b, int offset, int bits) {
+        int mask = ((1 << bits) - 1) << offset;
+        int value = (b & mask) >>> offset;
+        try {
+            return ((E[]) clazz.getMethod("values").invoke(null))[value];
+        } catch (Exception e) {
+            throw new IllegalArgumentException(String.format("Unable to parse enum of type %s", clazz.getSimpleName()),
+                    e);
+        }
     }
 
     @SuppressWarnings("unchecked")

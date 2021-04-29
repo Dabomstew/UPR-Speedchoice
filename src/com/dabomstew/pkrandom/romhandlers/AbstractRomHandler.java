@@ -54,9 +54,11 @@ import com.dabomstew.pkrandom.pokemon.EncounterSet;
 import com.dabomstew.pkrandom.pokemon.Evolution;
 import com.dabomstew.pkrandom.pokemon.EvolutionType;
 import com.dabomstew.pkrandom.pokemon.ExpCurve;
+import com.dabomstew.pkrandom.pokemon.FieldTM;
 import com.dabomstew.pkrandom.pokemon.GenRestrictions;
 import com.dabomstew.pkrandom.pokemon.IngameTrade;
 import com.dabomstew.pkrandom.pokemon.ItemList;
+import com.dabomstew.pkrandom.pokemon.ItemLocation;
 import com.dabomstew.pkrandom.pokemon.Move;
 import com.dabomstew.pkrandom.pokemon.MoveCategory;
 import com.dabomstew.pkrandom.pokemon.MoveLearnt;
@@ -239,6 +241,86 @@ public abstract class AbstractRomHandler implements RomHandler {
     }
 
     @Override
+    public void randomizePokemonBaseStats(final boolean evolutionSanity, final boolean dontRandomizeRatio, final boolean evosBuffStats) {
+        if(evolutionSanity) {
+            // ignore dontRandomizeRatio for evolutions - the two aren't compatible here
+            copyUpEvolutionsHelper(new BasePokemonAction() {
+                public void applyTo(Pokemon pk) {
+                    pk.randomizeBST(AbstractRomHandler.this.random, dontRandomizeRatio);
+                }
+            }, new EvolvedPokemonAction() {
+                public void applyTo(Pokemon evFrom, Pokemon evTo, boolean toMonIsFinalEvo) {
+                    evTo.copyRandomizedBSTUpEvolution(random, evFrom, evosBuffStats);
+                }
+            });
+        }
+        else if(evosBuffStats) {
+            copyUpEvolutionsHelper(new BasePokemonAction() {
+                public void applyTo(Pokemon pk) {
+                    pk.randomizeBST(AbstractRomHandler.this.random, dontRandomizeRatio);
+                }
+            }, new EvolvedPokemonAction() {
+                public void applyTo(Pokemon evFrom, Pokemon evTo, boolean toMonIsFinalEvo) {
+                    evTo.randomizeBSTSetAmountAbovePreevo(random, evFrom, dontRandomizeRatio);
+                }
+            });
+        }
+        else {
+            // no evolution carrying at all
+            List<Pokemon> allPokes = this.getPokemon();
+            for (Pokemon pk : allPokes) {
+                if (pk != null) {
+                    pk.randomizeBST(random, dontRandomizeRatio);
+                }
+            }
+        }
+    }
+    
+    @Override
+    public void randomizePokemonBaseStatsPerc(boolean evolutionSanity, final int percent, final boolean dontRandomizeRatio) {
+    	if (evolutionSanity) {
+            copyUpEvolutionsHelper(new BasePokemonAction() {
+                public void applyTo(Pokemon pk) {
+                    pk.randomizeBSTPerc(AbstractRomHandler.this.random, percent, dontRandomizeRatio);
+                }
+            }, new EvolvedPokemonAction() {
+                public void applyTo(Pokemon evFrom, Pokemon evTo, boolean toMonIsFinalEvo) {
+                   evTo.percentRaiseStatFloorUpEvolution(random, dontRandomizeRatio, evFrom);
+                }
+            });
+        } else {
+            List<Pokemon> allPokes = this.getPokemon();
+        	for(Pokemon pk : allPokes) {
+        	    if(pk != null) {
+        	        pk.randomizeBSTPerc(random, percent, dontRandomizeRatio);
+        	    }
+        	}
+        }
+    }
+    
+    @Override
+    public void equalizePokemonStats(boolean evolutionSanity, final boolean dontRandomizeRatio) {
+    	if (evolutionSanity) {
+            copyUpEvolutionsHelper(new BasePokemonAction() {
+                public void applyTo(Pokemon pk) {
+                    pk.equalizeBST(AbstractRomHandler.this.random, dontRandomizeRatio);
+                }
+            }, new EvolvedPokemonAction() {
+                public void applyTo(Pokemon evFrom, Pokemon evTo, boolean toMonIsFinalEvo) {
+                    evTo.copyEqualizedStatsUpEvolution(evFrom);
+                }
+            });
+        } else {
+            List<Pokemon> allPokes = this.getPokemon();
+            for (Pokemon pk : allPokes) {
+                if (pk != null) {
+                    pk.equalizeBST(this.random, dontRandomizeRatio);
+                }
+            }
+        }
+    }
+    
+    @Override
     public void updatePokemonStats() {
         List<Pokemon> pokes = getPokemon();
 
@@ -306,7 +388,7 @@ public abstract class AbstractRomHandler implements RomHandler {
             }
         }
     }
-
+    
     public Pokemon randomPokemon() {
         checkPokemonRestrictions();
         return mainPokemonList.get(this.random.nextInt(mainPokemonList.size()));
@@ -325,6 +407,8 @@ public abstract class AbstractRomHandler implements RomHandler {
     }
 
     private List<Pokemon> twoEvoPokes;
+    private List<Pokemon> oneEvoPokes;
+    private List<Pokemon> noEvoPokes;
 
     @Override
     public Pokemon random2EvosPokemon() {
@@ -347,6 +431,52 @@ public abstract class AbstractRomHandler implements RomHandler {
             }
         }
         return twoEvoPokes.get(this.random.nextInt(twoEvoPokes.size()));
+    }
+    
+    @Override
+    public Pokemon random1EvosPokemon() {
+        if (oneEvoPokes == null) {
+            // Prepare the list
+            oneEvoPokes = new ArrayList<Pokemon>();
+            List<Pokemon> allPokes = this.getPokemon();
+            for (Pokemon pk : allPokes) {
+                if (pk != null && pk.evolutionsTo.size() == 0 && pk.evolutionsFrom.size() > 0) {
+                    // Potential candidate
+                    for (Evolution ev : pk.evolutionsFrom) {
+                        // If any of the targets here dont evolve, the original
+                        // Pokemon has 1 stage.
+                        if (ev.to.evolutionsFrom.size() == 0) {
+                            oneEvoPokes.add(pk);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        return oneEvoPokes.get(this.random.nextInt(oneEvoPokes.size()));
+    }
+    
+    @Override
+    public Pokemon random0EvosPokemon(boolean banLegend, boolean onlyLegend) {
+        if (noEvoPokes == null) {
+            // Prepare the list
+            noEvoPokes = new ArrayList<Pokemon>();
+            List<Pokemon> allPokes = this.getPokemon();
+            for (Pokemon pk : allPokes) {
+                if (pk != null && pk.evolutionsTo.size() == 0 && pk.evolutionsFrom.size() == 0) {
+                	if(banLegend || onlyLegend){
+                		if(!pk.isLegendary() && banLegend) {
+                            noEvoPokes.add(pk);
+                		} else if(pk.isLegendary() && onlyLegend) {
+                			noEvoPokes.add(pk);
+                		}
+                	} else {
+                        noEvoPokes.add(pk);	
+                	}
+                }
+            }
+        }
+        return noEvoPokes.get(this.random.nextInt(noEvoPokes.size()));
     }
 
     @Override
@@ -547,10 +677,10 @@ public abstract class AbstractRomHandler implements RomHandler {
     }
 
     @Override
-    public void randomEncounters(boolean useTimeOfDay, boolean catchEmAll, boolean typeThemed, boolean usePowerLevels,
-            boolean noLegendaries) {
+    public void randomEncounters(boolean useTimeOfDay, boolean catchEmAll, boolean ceaReasonableOnly, boolean typeThemed, boolean usePowerLevels,
+            boolean noLegendaries, boolean condenseSlots) {
         checkPokemonRestrictions();
-        List<EncounterSet> currentEncounters = this.getEncounters(useTimeOfDay);
+        List<EncounterSet> currentEncounters = this.getEncounters(useTimeOfDay, condenseSlots);
 
         // New: randomize the order encounter sets are randomized in.
         // Leads to less predictable results for various modifiers.
@@ -565,6 +695,23 @@ public abstract class AbstractRomHandler implements RomHandler {
             List<Pokemon> allPokes = noLegendaries ? new ArrayList<Pokemon>(noLegendaryList) : new ArrayList<Pokemon>(
                     mainPokemonList);
             allPokes.removeAll(banned);
+            if(ceaReasonableOnly) {
+                // put all reasonable sets first so they get at least one loop of pokemon
+                // (provided there are enough of them)
+                Collections.sort(scrambledEncounters, new Comparator<EncounterSet>() {
+                    @Override
+                    public int compare(EncounterSet o1, EncounterSet o2) {
+                        if(o1.reasonable == o2.reasonable) {
+                            return 0;
+                        }
+                        else if(o1.reasonable) {
+                            return -1;
+                        }
+                        else {
+                            return 1;
+                        }
+                }});
+            }
             for (EncounterSet area : scrambledEncounters) {
                 List<Pokemon> pickablePokemon = allPokes;
                 if (area.bannedPokemon.size() > 0) {
@@ -662,14 +809,14 @@ public abstract class AbstractRomHandler implements RomHandler {
             }
         }
 
-        setEncounters(useTimeOfDay, currentEncounters);
+        setEncounters(useTimeOfDay, condenseSlots, currentEncounters);
     }
 
     @Override
-    public void area1to1Encounters(boolean useTimeOfDay, boolean catchEmAll, boolean typeThemed,
+    public void area1to1Encounters(boolean useTimeOfDay, boolean catchEmAll, boolean ceaReasonableOnly, boolean typeThemed,
             boolean usePowerLevels, boolean noLegendaries) {
         checkPokemonRestrictions();
-        List<EncounterSet> currentEncounters = this.getEncounters(useTimeOfDay);
+        List<EncounterSet> currentEncounters = this.getEncounters(useTimeOfDay, false);
         List<Pokemon> banned = this.bannedForWildEncounters();
 
         // New: randomize the order encounter sets are randomized in.
@@ -683,6 +830,23 @@ public abstract class AbstractRomHandler implements RomHandler {
             List<Pokemon> allPokes = noLegendaries ? new ArrayList<Pokemon>(noLegendaryList) : new ArrayList<Pokemon>(
                     mainPokemonList);
             allPokes.removeAll(banned);
+            if(ceaReasonableOnly) {
+                // put all reasonable sets first so they get at least one loop of pokemon
+                // (provided there are enough of them)
+                Collections.sort(scrambledEncounters, new Comparator<EncounterSet>() {
+                    @Override
+                    public int compare(EncounterSet o1, EncounterSet o2) {
+                        if(o1.reasonable == o2.reasonable) {
+                            return 0;
+                        }
+                        else if(o1.reasonable) {
+                            return -1;
+                        }
+                        else {
+                            return 1;
+                        }
+                }});
+            }
             for (EncounterSet area : scrambledEncounters) {
                 // Poke-set
                 Set<Pokemon> inArea = pokemonInArea(area);
@@ -818,7 +982,7 @@ public abstract class AbstractRomHandler implements RomHandler {
             }
         }
 
-        setEncounters(useTimeOfDay, currentEncounters);
+        setEncounters(useTimeOfDay, false, currentEncounters);
 
     }
 
@@ -879,7 +1043,7 @@ public abstract class AbstractRomHandler implements RomHandler {
             }
         }
 
-        List<EncounterSet> currentEncounters = this.getEncounters(useTimeOfDay);
+        List<EncounterSet> currentEncounters = this.getEncounters(useTimeOfDay, false);
 
         for (EncounterSet area : currentEncounters) {
             for (Encounter enc : area.encounters) {
@@ -904,7 +1068,7 @@ public abstract class AbstractRomHandler implements RomHandler {
             }
         }
 
-        setEncounters(useTimeOfDay, currentEncounters);
+        setEncounters(useTimeOfDay, false, currentEncounters);
 
     }
 
@@ -2283,11 +2447,22 @@ public abstract class AbstractRomHandler implements RomHandler {
         List<String>[] allTrainerNames = new List[] { new ArrayList<String>(), new ArrayList<String>() };
         Map<Integer, List<String>> trainerNamesByLength[] = new Map[] { new TreeMap<Integer, List<String>>(),
                 new TreeMap<Integer, List<String>>() };
+        
+        List<Character> bans = this.getBannedTrainerNameCharacters();
+        
+        List<String> repeatedTrainerNames = Arrays.asList(new String[] { "GRUNT", "EXECUTIVE", "SHADOW", "ADMIN", "GOON" });
 
         // Read name lists
         for (String trainername : customNames.getTrainerNames()) {
+            boolean okay = true;
+            for(char banned : bans) {
+                if(trainername.indexOf(banned) != -1) {
+                    okay = false;
+                    break;
+                }
+            }
             int len = this.internalStringLength(trainername);
-            if (len <= 10) {
+            if (len <= 10 && okay) {
                 allTrainerNames[0].add(trainername);
                 if (trainerNamesByLength[0].containsKey(len)) {
                     trainerNamesByLength[0].get(len).add(trainername);
@@ -2300,8 +2475,15 @@ public abstract class AbstractRomHandler implements RomHandler {
         }
 
         for (String trainername : customNames.getDoublesTrainerNames()) {
+            boolean okay = true;
+            for(char banned : bans) {
+                if(trainername.indexOf(banned) != -1) {
+                    okay = false;
+                    break;
+                }
+            }
             int len = this.internalStringLength(trainername);
-            if (len <= 10) {
+            if (len <= 10 && okay) {
                 allTrainerNames[1].add(trainername);
                 if (trainerNamesByLength[1].containsKey(len)) {
                     trainerNamesByLength[1].get(len).add(trainername);
@@ -2343,8 +2525,7 @@ public abstract class AbstractRomHandler implements RomHandler {
             int tnIndex = -1;
             for (String trainerName : currentTrainerNames) {
                 tnIndex++;
-                if (translation.containsKey(trainerName) && trainerName.equalsIgnoreCase("GRUNT") == false
-                        && trainerName.equalsIgnoreCase("EXECUTIVE") == false) {
+                if (translation.containsKey(trainerName) && !repeatedTrainerNames.contains(trainerName.toUpperCase())) {
                     // use an already picked translation
                     newTrainerNames.add(translation.get(trainerName));
                     totalLength += this.internalStringLength(translation.get(trainerName));
@@ -2585,21 +2766,32 @@ public abstract class AbstractRomHandler implements RomHandler {
 
     @Override
     public void shuffleFieldItems() {
-        List<Integer> currentItems = this.getRegularFieldItems();
-        List<Integer> currentTMs = this.getCurrentFieldTMs();
+        List<ItemLocation> currentItems = this.getRegularFieldItems();
+        List<FieldTM> currentTMs = this.getCurrentFieldTMs();
 
         Collections.shuffle(currentItems, this.random);
         Collections.shuffle(currentTMs, this.random);
+        
+        List<Integer> newItems = new ArrayList<Integer>();
+        List<Integer> newTMs = new ArrayList<Integer>();
+        
+        for(ItemLocation il : currentItems) {
+            newItems.add(il.item);
+        }
+        
+        for(FieldTM tm : currentTMs) {
+            newTMs.add(tm.tm);
+        }
 
-        this.setRegularFieldItems(currentItems);
-        this.setFieldTMs(currentTMs);
+        this.setRegularFieldItems(newItems);
+        this.setFieldTMs(newTMs);
     }
 
     @Override
     public void randomizeFieldItems(boolean banBadItems) {
         ItemList possibleItems = banBadItems ? this.getNonBadItems() : this.getAllowedItems();
-        List<Integer> currentItems = this.getRegularFieldItems();
-        List<Integer> currentTMs = this.getCurrentFieldTMs();
+        List<ItemLocation> currentItems = this.getRegularFieldItems();
+        List<FieldTM> currentTMs = this.getCurrentFieldTMs();
         List<Integer> requiredTMs = this.getRequiredFieldTMs();
 
         int fieldItemCount = currentItems.size();
@@ -3681,6 +3873,12 @@ public abstract class AbstractRomHandler implements RomHandler {
     public List<Pokemon> bannedForStaticPokemon() {
         return (List<Pokemon>) Collections.EMPTY_LIST;
     }
+    
+    @SuppressWarnings("unchecked")
+    @Override
+    public List<Character> getBannedTrainerNameCharacters() {
+        return (List<Character>) Collections.EMPTY_LIST;
+    }
 
     @Override
     public int maxTrainerNameLength() {
@@ -3741,5 +3939,11 @@ public abstract class AbstractRomHandler implements RomHandler {
     @Override
     public void applyMiscTweak(MiscTweak tweak) {
         // default: do nothing
+    }
+    
+    @Override
+    public boolean canCondenseEncounterSlots() {
+        // default: no
+        return false;
     }
 }

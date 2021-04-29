@@ -31,11 +31,11 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.util.zip.CRC32;
-
-import javax.xml.bind.DatatypeConverter;
 
 import com.dabomstew.pkrandom.exceptions.InvalidSupplementFilesException;
 import com.dabomstew.pkrandom.gui.RandomizerGUI;
@@ -51,25 +51,25 @@ public class Utils {
             int sigLength = fis.read(sig);
             fis.close();
             if (sigLength < 10) {
-                throw new InvalidROMException(InvalidROMException.Type.LENGTH, String.format(
-                        "%s appears to be a blank or nearly blank file.", fh.getName()));
+                throw new InvalidROMException(InvalidROMException.Type.LENGTH,
+                        String.format("%s appears to be a blank or nearly blank file.", fh.getName()));
             }
             if (sig[0] == 0x50 && sig[1] == 0x4b && sig[2] == 0x03 && sig[3] == 0x04) {
-                throw new InvalidROMException(InvalidROMException.Type.ZIP_FILE, String.format(
-                        "%s is a ZIP archive, not a ROM.", fh.getName()));
+                throw new InvalidROMException(InvalidROMException.Type.ZIP_FILE,
+                        String.format("%s is a ZIP archive, not a ROM.", fh.getName()));
             }
             if (sig[0] == 0x52 && sig[1] == 0x61 && sig[2] == 0x72 && sig[3] == 0x21 && sig[4] == 0x1A
                     && sig[5] == 0x07) {
-                throw new InvalidROMException(InvalidROMException.Type.RAR_FILE, String.format(
-                        "%s is a RAR archive, not a ROM.", fh.getName()));
+                throw new InvalidROMException(InvalidROMException.Type.RAR_FILE,
+                        String.format("%s is a RAR archive, not a ROM.", fh.getName()));
             }
             if (sig[0] == 'P' && sig[1] == 'A' && sig[2] == 'T' && sig[3] == 'C' && sig[4] == 'H') {
-                throw new InvalidROMException(InvalidROMException.Type.IPS_FILE, String.format(
-                        "%s is a IPS patch, not a ROM.", fh.getName()));
+                throw new InvalidROMException(InvalidROMException.Type.IPS_FILE,
+                        String.format("%s is a IPS patch, not a ROM.", fh.getName()));
             }
         } catch (IOException ex) {
-            throw new InvalidROMException(InvalidROMException.Type.UNREADABLE, String.format(
-                    "Could not read %s from disk.", fh.getName()));
+            throw new InvalidROMException(InvalidROMException.Type.UNREADABLE,
+                    String.format("Could not read %s from disk.", fh.getName()));
         }
     }
 
@@ -89,7 +89,7 @@ public class Utils {
 
     public static void validatePresetSupplementFiles(String config, CustomNamesSet customNames)
             throws UnsupportedEncodingException, InvalidSupplementFilesException {
-        byte[] data = DatatypeConverter.parseBase64Binary(config);
+        byte[] data = base64ToBytes(config);
 
         if (data.length < Settings.LENGTH_OF_SETTINGS_DATA + 9) {
             throw new InvalidSupplementFilesException(InvalidSupplementFilesException.Type.UNKNOWN,
@@ -108,7 +108,8 @@ public class Utils {
         }
 
         // Check the trainerclass & trainernames & nicknames crc
-        if (customNames == null && !FileFunctions.checkOtherCRC(data, 16, 4, SysConstants.customNamesFile, data.length - 4)) {
+        if (customNames == null
+                && !FileFunctions.checkOtherCRC(data, 16, 4, SysConstants.customNamesFile, data.length - 4)) {
             throw new InvalidSupplementFilesException(InvalidSupplementFilesException.Type.CUSTOM_NAMES,
                     "Can't use this preset because you have a different set " + "of custom names to the creator.");
         }
@@ -140,5 +141,96 @@ public class Utils {
         public Type getType() {
             return type;
         }
+    }
+
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    public static String bytesToBase64(byte[] buf) {
+        try {
+            Class b64 = Class.forName("java.util.Base64");
+            Method getenc = b64.getMethod("getEncoder");
+            Object encoder = getenc.invoke(null);
+            Method encodeMethod = encoder.getClass().getMethod("encodeToString", byte[].class);
+            return (String) encodeMethod.invoke(encoder, buf);
+        } catch (ClassNotFoundException ex) {
+            try {
+                Class dt = Class.forName("javax.xml.bind.DatatypeConverter");
+                Method encode = dt.getMethod("printBase64Binary", byte[].class);
+                return (String) encode.invoke(null, buf);
+            } catch (ClassNotFoundException e) {
+                throw new RuntimeException(e);
+            } catch (NoSuchMethodException e) {
+                throw new RuntimeException(e);
+            } catch (SecurityException e) {
+                throw new RuntimeException(e);
+            } catch (IllegalAccessException e) {
+                throw new RuntimeException(e);
+            } catch (IllegalArgumentException e) {
+                throw new RuntimeException(e);
+            } catch (InvocationTargetException e) {
+                throw new RuntimeException(e);
+            }
+
+        } catch (IllegalAccessException e) {
+            throw new RuntimeException(e);
+        } catch (NoSuchMethodException e) {
+            throw new RuntimeException(e);
+        } catch (SecurityException e) {
+            throw new RuntimeException(e);
+        } catch (IllegalArgumentException e) {
+            throw new RuntimeException(e);
+        } catch (InvocationTargetException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    public static byte[] base64ToBytes(String base64) {
+        try {
+            Class b64 = Class.forName("java.util.Base64");
+            Method getenc = b64.getMethod("getDecoder");
+            Object decoder = getenc.invoke(null);
+            Method decodeMethod = decoder.getClass().getMethod("decode", String.class);
+            return (byte[]) decodeMethod.invoke(decoder, base64);
+        } catch (ClassNotFoundException ex) {
+            try {
+                Class dt = Class.forName("javax.xml.bind.DatatypeConverter");
+                Method decode = dt.getMethod("parseBase64Binary", String.class);
+                return (byte[]) decode.invoke(null, base64);
+            } catch (ClassNotFoundException e) {
+                throw new RuntimeException(e);
+            } catch (NoSuchMethodException e) {
+                throw new RuntimeException(e);
+            } catch (SecurityException e) {
+                throw new RuntimeException(e);
+            } catch (IllegalAccessException e) {
+                throw new RuntimeException(e);
+            } catch (IllegalArgumentException e) {
+                throw new RuntimeException(e);
+            } catch (InvocationTargetException e) {
+                throw new RuntimeException(e);
+            }
+
+        } catch (IllegalAccessException e) {
+            throw new RuntimeException(e);
+        } catch (NoSuchMethodException e) {
+            throw new RuntimeException(e);
+        } catch (SecurityException e) {
+            throw new RuntimeException(e);
+        } catch (IllegalArgumentException e) {
+            throw new RuntimeException(e);
+        } catch (InvocationTargetException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static final String hexChars = "0123456789ABCDEF";
+
+    public static String toHexString(byte[] data) {
+        StringBuilder sb = new StringBuilder();
+        for (byte b : data) {
+            sb.append(hexChars.charAt((b & 0xF0) >>> 4));
+            sb.append(hexChars.charAt(b & 0x0F));
+        }
+        return sb.toString();
     }
 }
