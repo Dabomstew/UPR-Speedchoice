@@ -29,8 +29,10 @@ manifest.mf
 /nicknames.txt
 /trainerclasses.txt
 /trainernames.txt
-/build/
+build/*
+!build/randomizer.xml
 *.dsm
 *.dsv
 build_eclipse.xml
 /customnames.rncn
+!.github/*
