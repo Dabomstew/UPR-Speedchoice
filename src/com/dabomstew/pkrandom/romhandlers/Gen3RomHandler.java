@@ -116,6 +116,7 @@ public class Gen3RomHandler extends AbstractGBRomHandler {
         private List<StaticPokemon> staticPokemon = new ArrayList<StaticPokemon>();
         private List<TMOrMTTextEntry> tmmtTexts = new ArrayList<TMOrMTTextEntry>();
         private Map<String, String> codeTweaks = new HashMap<String, String>();
+        private List<Integer> plotlessItems = new ArrayList<Integer>();
 
         public RomEntry() {
             this.hash = null;
@@ -250,6 +251,8 @@ public class Gen3RomHandler extends AbstractGBRomHandler {
                                 tte.isMoveTutor = true;
                                 current.tmmtTexts.add(tte);
                             }
+                        } else if (r[0].equals("PlotlessKeyItems[]")) {
+                            current.plotlessItems.add(parseRIInt(r[1]));
                         } else if (r[0].equals("Game")) {
                             current.romCode = r[1];
                         } else if (r[0].equals("Version")) {
@@ -396,7 +399,7 @@ public class Gen3RomHandler extends AbstractGBRomHandler {
             rom[Gen3Constants.headerChecksumOffset] = 0x66;
         }
         // Wild Pokemon header
-        if (find(rom, Gen3Constants.wildPokemonPointerPrefix) == -1 && !romCode(rom, "SPDC")) {
+        if (find(rom, Gen3Constants.wildPokemonPointerPrefix) == -1 && !(romCode(rom, "SPDC") || romCode(rom, "MBDN"))) {
             return false;
         }
         // Map Banks header
@@ -480,7 +483,7 @@ public class Gen3RomHandler extends AbstractGBRomHandler {
         loadMoves();
 
         // Get wild Pokemon offset
-        if (!("SPDC".equals(romEntry.romCode))) {
+        if (!(romEntry.romCode.matches("^(SPDC|MBDN)$"))) {
             int baseWPOffset = findMultiple(rom, Gen3Constants.wildPokemonPointerPrefix).get(0);
             romEntry.entries.put("WildPokemon", readPointer(baseWPOffset + 12));
         }
@@ -1280,7 +1283,7 @@ public class Gen3RomHandler extends AbstractGBRomHandler {
             // Add pokemanz
             if (grassPokes >= 0 && grassPokes < rom.length && rom[grassPokes] != 0
                     && !seenOffsets.contains(readPointer(grassPokes + 4))) {
-                int numSlots = "SPDC".equals(romEntry.romCode) ? 6 : Gen3Constants.grassSlots;
+                int numSlots = romEntry.romCode.matches("^(SPDC|MBDN)$") ? 6 : Gen3Constants.grassSlots;
                 encounterAreas.add(readWildArea(grassPokes, numSlots, mapName + " Grass/Cave"));
                 seenOffsets.add(readPointer(grassPokes + 4));
             }
@@ -1353,19 +1356,27 @@ public class Gen3RomHandler extends AbstractGBRomHandler {
         // Grab the *real* pointer to data
         int dataOffset = readPointer(offset + 4);
 
-        if ("SPDC".equals(romEntry.romCode)) // speedchoice
+        if (romEntry.romCode.equals("SPDC")) // Emerald speedchoice
         {
             numOfEntries = 2; // no memes allowed
+        }
+        else if (romEntry.romCode.equals("MBDN")) // FireRed speedchoice
+        {
+            numOfEntries = 6; // limited memes allowed
         }
 
         // Read the entries
         for (int i = 0; i < numOfEntries; i++) {
             // min, max, species, species
             Encounter enc = new Encounter();
-            enc.level = rom[dataOffset + i * 4];
-            enc.maxLevel = rom[dataOffset + i * 4 + 1];
+            int realIndex = i;
+            if (romEntry.romCode.equals("MBDN") && i >= 4) {
+                realIndex ++;
+            }
+            enc.level = rom[dataOffset + realIndex * 4];
+            enc.maxLevel = rom[dataOffset + realIndex * 4 + 1];
             try {
-                enc.pokemon = pokesInternal[readWord(dataOffset + i * 4 + 2)];
+                enc.pokemon = pokesInternal[readWord(dataOffset + realIndex * 4 + 2)];
             } catch (ArrayIndexOutOfBoundsException ex) {
                 throw ex;
             }
@@ -1399,8 +1410,8 @@ public class Gen3RomHandler extends AbstractGBRomHandler {
             // Add pokemanz
             if (grassPokes >= 0 && grassPokes < rom.length && rom[grassPokes] != 0
                     && !seenOffsets.contains(readPointer(grassPokes + 4))) {
-                int numSlots = "SPDC".equals(romEntry.romCode) ? 6 : Gen3Constants.grassSlots;
-                writeWildArea(grassPokes, numSlots, encounterAreas.next(), "SPDC".equals(romEntry.romCode));
+                int numSlots = romEntry.romCode.matches("^(SPDC|MBDN)$") ? 6 : Gen3Constants.grassSlots;
+                writeWildArea(grassPokes, numSlots, encounterAreas.next(), romEntry.romCode.matches("^(SPDC|MBDN)$"));
                 seenOffsets.add(readPointer(grassPokes + 4));
             }
             if (waterPokes >= 0 && waterPokes < rom.length && rom[waterPokes] != 0
@@ -1425,7 +1436,7 @@ public class Gen3RomHandler extends AbstractGBRomHandler {
 
     @Override
     public List<Pokemon> bannedForWildEncounters() {
-        if (romEntry.romType == Gen3Constants.RomType_FRLG) {
+        if (romEntry.romType == Gen3Constants.RomType_FRLG && !romEntry.romCode.equals("MBDN")) {
             return Arrays.asList(pokes[Gen3Constants.unownIndex]); // Unown
                                                                    // banned
         } else {
@@ -1619,22 +1630,52 @@ public class Gen3RomHandler extends AbstractGBRomHandler {
     private void writeWildAreaFishing(int offset, int numOfEntries, EncounterSet encounters) {
         // Grab the *real* pointer to data
         int dataOffset = readPointer(offset + 4);
-        if ("SPDC".equals(romEntry.romCode)) // speedchoice
+
+        if (romEntry.romCode.equals("SPDC")) // Emerald speedchoice
         {
             numOfEntries = 2;
+        }
+        else if (romEntry.romCode.equals("MBDN"))
+        {
+            numOfEntries = 6;
         }
         // Write the entries
         for (int i = 0; i < numOfEntries; i++) {
             Encounter enc = encounters.encounters.get(i);
-            // min, max, species, species
-            writeWord(dataOffset + i * 4 + 2, pokedexToInternal[enc.pokemon.number]);
-            // Speedchoice duplication.. 4 extra times
-            if ("SPDC".equals(romEntry.romCode)) // speedchoice
+            if (romEntry.romCode.equals("MBDN"))
             {
-                writeWord(dataOffset + (i + numOfEntries) * 4 + 2, pokedexToInternal[enc.pokemon.number]);
-                writeWord(dataOffset + (i + numOfEntries * 2) * 4 + 2, pokedexToInternal[enc.pokemon.number]);
-                writeWord(dataOffset + (i + numOfEntries * 3) * 4 + 2, pokedexToInternal[enc.pokemon.number]);
-                writeWord(dataOffset + (i + numOfEntries * 4) * 4 + 2, pokedexToInternal[enc.pokemon.number]);
+                // OLD:   0 1
+                // GOOD:  2 3 2
+                // SUPER: 4 5 4 5 4
+                switch (i)
+                {
+                    case 2:
+                        writeWord(dataOffset + (i + 2) * 4 + 2, pokedexToInternal[enc.pokemon.number]);
+                    case 0:
+                    case 1:
+                    case 3:
+                        writeWord(dataOffset + i * 4 + 2, pokedexToInternal[enc.pokemon.number]);
+                        break;
+                    case 4:
+                        writeWord(dataOffset + (i + 5) * 4 + 2, pokedexToInternal[enc.pokemon.number]);
+                    case 5:
+                        writeWord(dataOffset + (i + 3) * 4 + 2, pokedexToInternal[enc.pokemon.number]);
+                        writeWord(dataOffset + (i + 1) * 4 + 2, pokedexToInternal[enc.pokemon.number]);
+                        break;
+                }
+            }
+            else
+            {
+                // min, max, species, species
+                writeWord(dataOffset + i * 4 + 2, pokedexToInternal[enc.pokemon.number]);
+                // Speedchoice duplication.. 4 extra times
+                if (romEntry.romCode.equals("SPDC")) // Emerald speedchoice
+                {
+                    writeWord(dataOffset + (i + numOfEntries) * 4 + 2, pokedexToInternal[enc.pokemon.number]);
+                    writeWord(dataOffset + (i + numOfEntries * 2) * 4 + 2, pokedexToInternal[enc.pokemon.number]);
+                    writeWord(dataOffset + (i + numOfEntries * 3) * 4 + 2, pokedexToInternal[enc.pokemon.number]);
+                    writeWord(dataOffset + (i + numOfEntries * 4) * 4 + 2, pokedexToInternal[enc.pokemon.number]);
+                }
             }
         }
     }
@@ -2012,7 +2053,10 @@ public class Gen3RomHandler extends AbstractGBRomHandler {
                 int oldPointer = readPointer(tte.actualOffset);
                 if (oldPointer < 0 || oldPointer >= rom.length) {
                     throw new RandomizationException(
-                            "Move Tutor Text update failed: couldn't read a move tutor text pointer.");
+                            String.format("Move Tutor Text update failed: couldn't read a move tutor text pointer.\n" +
+                            "Tutor no: %d\n" +
+                            "Pointer: 0x%X\n" +
+                            "Old pointer: 0x%X", tte.number, tte.actualOffset, oldPointer));
                 }
                 String moveName = this.moves[moves.get(tte.number)].name;
                 // temporarily use underscores to stop the move name being split
@@ -2212,7 +2256,7 @@ public class Gen3RomHandler extends AbstractGBRomHandler {
         if (romEntry.romType == Gen3Constants.RomType_Ruby || romEntry.romType == Gen3Constants.RomType_Sapp) {
             // Find the original pokedex script
             int pkDexOffset = 0;
-            if ("SPDC".equals(romEntry.romCode)) // speedchoice
+            if (romEntry.romCode.matches("^(SPDC|MBDN)$")) // speedchoice
             {
                 pkDexOffset = find(Gen3Constants.rsSpeedchoiceNatDexScriptPart2);
             } else {
@@ -2859,6 +2903,10 @@ public class Gen3RomHandler extends AbstractGBRomHandler {
                 }
             }
         }
+        // Plotless items
+        for (int itemOff : romEntry.plotlessItems) {
+            itemOffs.add(new ItemLocationInner(-1, -1, -1, -1, itemOff, false));
+        }
     }
 
     @Override
@@ -2956,7 +3004,7 @@ public class Gen3RomHandler extends AbstractGBRomHandler {
 
         for (ItemLocationInner il : itemOffs) {
             int itemHere = readWord(il.offset);
-            if (Gen3Constants.allowedItems.isAllowed(itemHere) && !(Gen3Constants.allowedItems.isTM(itemHere))) {
+            if (il.mapBank == -1 /* is plotless key item */ || (Gen3Constants.allowedItems.isAllowed(itemHere) && !(Gen3Constants.allowedItems.isTM(itemHere)))) {
                 fieldItems.add(new ItemLocation(il.toString(), itemHere));
             }
         }
