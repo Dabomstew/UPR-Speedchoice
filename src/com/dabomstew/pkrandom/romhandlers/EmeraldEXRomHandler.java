@@ -2523,43 +2523,15 @@ public class EmeraldEXRomHandler extends AbstractGBRomHandler {
 
     private void randomizeCatchingTutorial() {
         if (romEntry.getValue("CatchingTutorialOpponentMonOffset") > 0) {
+            int oppMon = randomPokemon().speciesNumber;
             int oppOffset = romEntry.getValue("CatchingTutorialOpponentMonOffset");
-            Pokemon opponent = randomPokemonLimited(510, true);
-            if (opponent != null) {
-                int oppValue = opponent.speciesNumber;
-                if (oppValue > 255) {
-                    rom[oppOffset] = (byte) 0xFF;
-                    rom[oppOffset + 1] = EmeraldEXConstants.gbaSetRxOpcode | EmeraldEXConstants.gbaR1;
-
-                    rom[oppOffset + 2] = (byte) (oppValue - 0xFF);
-                    rom[oppOffset + 3] = EmeraldEXConstants.gbaAddRxOpcode | EmeraldEXConstants.gbaR1;
-                } else {
-                    rom[oppOffset] = (byte) oppValue;
-                    rom[oppOffset + 1] = EmeraldEXConstants.gbaSetRxOpcode | EmeraldEXConstants.gbaR1;
-
-                    writeWord(oppOffset + 2, EmeraldEXConstants.gbaNopOpcode);
-                }
-            }
+            writeWord(oppOffset, oppMon);
         }
 
         if (romEntry.getValue("CatchingTutorialPlayerMonOffset") > 0) {
+            int playerMon = randomPokemon().speciesNumber;
             int playerOffset = romEntry.getValue("CatchingTutorialPlayerMonOffset");
-            Pokemon playerMon = randomPokemonLimited(510, false);
-            if (playerMon != null) {
-                int plyValue = playerMon.speciesNumber;
-                if (plyValue > 255) {
-                    rom[playerOffset] = (byte) 0xFF;
-                    rom[playerOffset + 1] = EmeraldEXConstants.gbaSetRxOpcode | EmeraldEXConstants.gbaR1;
-
-                    rom[playerOffset + 2] = (byte) (plyValue - 0xFF);
-                    rom[playerOffset + 3] = EmeraldEXConstants.gbaAddRxOpcode | EmeraldEXConstants.gbaR1;
-                } else {
-                    rom[playerOffset] = (byte) plyValue;
-                    rom[playerOffset + 1] = EmeraldEXConstants.gbaSetRxOpcode | EmeraldEXConstants.gbaR1;
-
-                    writeWord(playerOffset + 2, EmeraldEXConstants.gbaNopOpcode);
-                }
-            }
+            writeWord(playerOffset, playerMon);
         }
 
     }
