@@ -33,7 +33,7 @@ import java.util.Random;
 public class Pokemon implements Comparable<Pokemon> {
 
     public String name;
-    public int number;
+    public int number, speciesNumber;
 
     public Type primaryType, secondaryType;
 
@@ -360,6 +360,7 @@ public class Pokemon implements Comparable<Pokemon> {
         final int prime = 31;
         int result = 1;
         result = prime * result + number;
+        result = prime * result + speciesNumber;
         return result;
     }
 
@@ -374,12 +375,14 @@ public class Pokemon implements Comparable<Pokemon> {
         Pokemon other = (Pokemon) obj;
         if (number != other.number)
             return false;
+        if (speciesNumber != other.speciesNumber)
+            return false;
         return true;
     }
 
     @Override
     public int compareTo(Pokemon o) {
-        return number - o.number;
+        return (number == o.number) ? speciesNumber - o.speciesNumber : number - o.number;
     }
 
     private static final List<Integer> legendaries = Arrays.asList(144, 145, 146, 150, 151, 243, 244, 245, 249, 250,

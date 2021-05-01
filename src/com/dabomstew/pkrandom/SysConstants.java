@@ -30,7 +30,7 @@ import java.io.File;
 public class SysConstants {
 
     public static final String AUTOUPDATE_URL = "http://pokehacks.dabomstew.com/randomizer/autoupdate/";
-    public static final String WEBSITE_URL = "http://pokehacks.dabomstew.com/randomizer/";
+    public static final String WEBSITE_URL = "https://github.com/Dabomstew/UPR-Speedchoice";
     public static final int UPDATE_VERSION = 1721;
     public static final String ROOT_PATH = getRootPath();
     public static final String LINE_SEP = System.getProperty("line.separator");

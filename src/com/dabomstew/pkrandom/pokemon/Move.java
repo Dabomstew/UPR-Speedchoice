@@ -35,6 +35,7 @@ public class Move {
     public int effectIndex;
     public MoveCategory category;
     public double hitCount = 1; // not saved, only used in randomized move powers.
+    public boolean valid = true; // used to ignore Emerald EX EFFECT_PLACEHOLDER
 
     public String toString() {
         return "#" + number + " " + name + " - Power: " + power + ", Base PP: " + pp + ", Type: " + type + ", Hit%: "
