@@ -100,7 +100,6 @@ public class RomFunctions {
     }
 
     public static int[] getMovesAtLevel(Pokemon pkmn, Map<Pokemon, List<MoveLearnt>> movesets, int level, int emptyValue) {
-        System.out.printf("%s %d %d\n", pkmn.name, pkmn.number, pkmn.speciesNumber);
         int[] curMoves = new int[4];
 
         if (emptyValue != 0) {
