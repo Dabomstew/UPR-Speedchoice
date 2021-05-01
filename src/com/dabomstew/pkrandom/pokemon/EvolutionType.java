@@ -1,6 +1,7 @@
 package com.dabomstew.pkrandom.pokemon;
 
 public enum EvolutionType {
+    // gen1, gen2, gen3, gen4, gen5, emeraldex
     /* @formatter:off */
     LEVEL(1, 1, 4, 4, 4, 4),
     STONE(2, 2, 7, 7, 8, 7),
@@ -59,23 +60,12 @@ public enum EvolutionType {
         this.indexNumbers = indexes;
     }
 
-    /**
-     * 
-     * @param generation Gen number (6 is used for Emerald EX)
-     * @return
-     */
-    public int toIndex(int generation) {
-        return indexNumbers[generation - 1];
+    public int toIndex(EvolutionDataVersion version) {
+        return indexNumbers[version.index];
     }
 
-    /**
-     * 
-     * @param generation Gen number (6 is used for Emerald EX)
-     * @param index
-     * @return
-     */
-    public static EvolutionType fromIndex(int generation, int index) {
-        return reverseIndexes[generation - 1][index];
+    public static EvolutionType fromIndex(EvolutionDataVersion version, int index) {
+        return reverseIndexes[version.index][index];
     }
 
     public boolean usesLevel() {

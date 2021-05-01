@@ -51,6 +51,7 @@ import com.dabomstew.pkrandom.newnds.NARCArchive;
 import com.dabomstew.pkrandom.pokemon.Encounter;
 import com.dabomstew.pkrandom.pokemon.EncounterSet;
 import com.dabomstew.pkrandom.pokemon.Evolution;
+import com.dabomstew.pkrandom.pokemon.EvolutionDataVersion;
 import com.dabomstew.pkrandom.pokemon.EvolutionType;
 import com.dabomstew.pkrandom.pokemon.ExpCurve;
 import com.dabomstew.pkrandom.pokemon.FieldTM;
@@ -2390,7 +2391,7 @@ public class Gen4RomHandler extends AbstractDSRomHandler {
                     int method = readWord(evoEntry, evo * 6);
                     int species = readWord(evoEntry, evo * 6 + 4);
                     if (method >= 1 && method <= Gen4Constants.evolutionMethodCount && species >= 1) {
-                        EvolutionType et = EvolutionType.fromIndex(4, method);
+                        EvolutionType et = EvolutionType.fromIndex(EvolutionDataVersion.GEN_4, method);
                         int extraInfo = readWord(evoEntry, evo * 6 + 2);
                         Evolution evol = new Evolution(pokes[i], pokes[species], true, et, extraInfo);
                         if (!pk.evolutionsFrom.contains(evol)) {
@@ -2419,7 +2420,7 @@ public class Gen4RomHandler extends AbstractDSRomHandler {
                 int evosWritten = 0;
                 Pokemon pk = pokes[i];
                 for (Evolution evo : pk.evolutionsFrom) {
-                    writeWord(evoEntry, evosWritten * 6, evo.type.toIndex(4));
+                    writeWord(evoEntry, evosWritten * 6, evo.type.toIndex(EvolutionDataVersion.GEN_4));
                     writeWord(evoEntry, evosWritten * 6 + 2, evo.extraInfo);
                     writeWord(evoEntry, evosWritten * 6 + 4, evo.to.number);
                     evosWritten++;

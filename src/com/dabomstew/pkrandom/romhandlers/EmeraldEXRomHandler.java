@@ -57,6 +57,7 @@ import com.dabomstew.pkrandom.exceptions.RandomizerIOException;
 import com.dabomstew.pkrandom.pokemon.Encounter;
 import com.dabomstew.pkrandom.pokemon.EncounterSet;
 import com.dabomstew.pkrandom.pokemon.Evolution;
+import com.dabomstew.pkrandom.pokemon.EvolutionDataVersion;
 import com.dabomstew.pkrandom.pokemon.EvolutionType;
 import com.dabomstew.pkrandom.pokemon.ExpCurve;
 import com.dabomstew.pkrandom.pokemon.FieldTM;
@@ -1815,9 +1816,9 @@ public class EmeraldEXRomHandler extends AbstractGBRomHandler {
             for (int j = 0; j < 10; j++) {
                 int method = readWord(evoOffset + j * 8);
                 int evolvingTo = readWord(evoOffset + j * 8 + 4);
-                if (evolvingTo >= 1 && evolvingTo <= numInternalPokes && EvolutionType.fromIndex(6, method) != null) {
+                if (evolvingTo >= 1 && evolvingTo <= numInternalPokes && EvolutionType.fromIndex(EvolutionDataVersion.EMERALD_EX, method) != null) {
                     int extraInfo = readWord(evoOffset + j * 8 + 2);
-                    EvolutionType et = EvolutionType.fromIndex(6, method);
+                    EvolutionType et = EvolutionType.fromIndex(EvolutionDataVersion.EMERALD_EX, method);
                     Evolution evo = new Evolution(pk, pokesInternal[evolvingTo], true, et, extraInfo);
                     if (!pk.evolutionsFrom.contains(evo)) {
                         pk.evolutionsFrom.add(evo);
@@ -1842,7 +1843,7 @@ public class EmeraldEXRomHandler extends AbstractGBRomHandler {
             int evoOffset = baseOffset + (idx) * 0x50;
             int evosWritten = 0;
             for (Evolution evo : pk.evolutionsFrom) {
-                writeWord(evoOffset, evo.type.toIndex(6));
+                writeWord(evoOffset, evo.type.toIndex(EvolutionDataVersion.EMERALD_EX));
                 writeWord(evoOffset + 2, evo.extraInfo);
                 writeWord(evoOffset + 4, evo.to.speciesNumber);
                 writeWord(evoOffset + 6, 0);

@@ -54,6 +54,7 @@ import com.dabomstew.pkrandom.exceptions.RandomizerIOException;
 import com.dabomstew.pkrandom.pokemon.Encounter;
 import com.dabomstew.pkrandom.pokemon.EncounterSet;
 import com.dabomstew.pkrandom.pokemon.Evolution;
+import com.dabomstew.pkrandom.pokemon.EvolutionDataVersion;
 import com.dabomstew.pkrandom.pokemon.EvolutionType;
 import com.dabomstew.pkrandom.pokemon.ExpCurve;
 import com.dabomstew.pkrandom.pokemon.FieldTM;
@@ -1420,7 +1421,7 @@ public class Gen1RomHandler extends AbstractGBCRomHandler {
                 Pokemon pkmn = pokes[thisPoke];
                 while (rom[realPointer] != 0) {
                     int method = rom[realPointer];
-                    EvolutionType type = EvolutionType.fromIndex(1, method);
+                    EvolutionType type = EvolutionType.fromIndex(EvolutionDataVersion.GEN_1, method);
                     int otherPoke = pokeRBYToNumTable[rom[realPointer + 2 + (type == EvolutionType.STONE ? 1 : 0)] & 0xFF];
                     int extraInfo = rom[realPointer + 1] & 0xFF;
                     Evolution evo = new Evolution(pkmn, pokes[otherPoke], true, type, extraInfo);
@@ -2240,7 +2241,7 @@ public class Gen1RomHandler extends AbstractGBCRomHandler {
                 } else {
                     for (Evolution evo : pkmn.evolutionsFrom) {
                         // write evos for this poke
-                        dataStream.write(evo.type.toIndex(1));
+                        dataStream.write(evo.type.toIndex(EvolutionDataVersion.GEN_1));
                         if (evo.type == EvolutionType.LEVEL) {
                             dataStream.write(evo.extraInfo); // min lvl
                         } else if (evo.type == EvolutionType.STONE) {
