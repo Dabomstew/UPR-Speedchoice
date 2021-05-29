@@ -36,3 +36,6 @@ build/*
 build_eclipse.xml
 /customnames.rncn
 !.github/*
+classes/
+.idea/
+*.iml
