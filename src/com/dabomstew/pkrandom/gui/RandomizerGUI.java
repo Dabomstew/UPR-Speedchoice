@@ -78,6 +78,7 @@ import com.dabomstew.pkrandom.exceptions.RandomizationException;
 import com.dabomstew.pkrandom.pokemon.GenRestrictions;
 import com.dabomstew.pkrandom.pokemon.Pokemon;
 import com.dabomstew.pkrandom.romhandlers.AbstractDSRomHandler;
+import com.dabomstew.pkrandom.romhandlers.EmeraldEXRomHandler;
 import com.dabomstew.pkrandom.romhandlers.Gen1RomHandler;
 import com.dabomstew.pkrandom.romhandlers.Gen2RomHandler;
 import com.dabomstew.pkrandom.romhandlers.Gen3RomHandler;
@@ -167,9 +168,9 @@ public class RandomizerGUI extends javax.swing.JFrame {
         ToolTipManager.sharedInstance().setDismissDelay(Integer.MAX_VALUE);
         bundle = java.util.ResourceBundle.getBundle("com/dabomstew/pkrandom/gui/Bundle"); // NOI18N
         testForRequiredConfigs();
-        checkHandlers = new RomHandler.Factory[] { new Gen1RomHandler.Factory(), new Gen2RomHandler.Factory(),
+        checkHandlers = new RomHandler.Factory[] { new Gen1RomHandler.Factory(), new Gen2RomHandler.Factory(), new EmeraldEXRomHandler.Factory(),
                 new Gen3RomHandler.Factory(), new Gen4RomHandler.Factory(), new Gen5RomHandler.Factory() };
-        autoUpdateEnabled = true;
+        autoUpdateEnabled = false;
         haveCheckedCustomNames = false;
         useScrollPaneMode = !onWindowsLAF;
         attemptReadConfig();
@@ -195,9 +196,6 @@ public class RandomizerGUI extends javax.swing.JFrame {
         setVisible(true);
         if (!haveCheckedCustomNames) {
             checkCustomNames();
-        }
-        if (autoUpdateEnabled) {
-            new UpdateCheckThread(this, false).start();
         }
     }
 

@@ -1810,7 +1810,7 @@ public abstract class AbstractRomHandler implements RomHandler {
         Map<Type, List<Move>> validTypeDamagingMoves = new HashMap<Type, List<Move>>();
 
         for (Move mv : allMoves) {
-            if (mv != null && !GlobalConstants.bannedRandomMoves[mv.number] && !allBanned.contains(mv.number)) {
+            if (mv != null && !GlobalConstants.bannedRandomMoves[mv.number] && !allBanned.contains(mv.number) && mv.valid) {
                 validMoves.add(mv);
                 if (mv.type != null) {
                     if (!validTypeMoves.containsKey(mv.type)) {

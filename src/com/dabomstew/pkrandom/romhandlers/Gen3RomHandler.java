@@ -58,6 +58,7 @@ import com.dabomstew.pkrandom.exceptions.RandomizerIOException;
 import com.dabomstew.pkrandom.pokemon.Encounter;
 import com.dabomstew.pkrandom.pokemon.EncounterSet;
 import com.dabomstew.pkrandom.pokemon.Evolution;
+import com.dabomstew.pkrandom.pokemon.EvolutionDataVersion;
 import com.dabomstew.pkrandom.pokemon.EvolutionType;
 import com.dabomstew.pkrandom.pokemon.ExpCurve;
 import com.dabomstew.pkrandom.pokemon.FieldTM;
@@ -2382,7 +2383,7 @@ public class Gen3RomHandler extends AbstractGBRomHandler {
                 if (method >= 1 && method <= Gen3Constants.evolutionMethodCount && evolvingTo >= 1
                         && evolvingTo <= numInternalPokes) {
                     int extraInfo = readWord(evoOffset + j * 8 + 2);
-                    EvolutionType et = EvolutionType.fromIndex(3, method);
+                    EvolutionType et = EvolutionType.fromIndex(EvolutionDataVersion.GEN_3, method);
                     Evolution evo = new Evolution(pk, pokesInternal[evolvingTo], true, et, extraInfo);
                     if (!pk.evolutionsFrom.contains(evo)) {
                         pk.evolutionsFrom.add(evo);
@@ -2407,7 +2408,7 @@ public class Gen3RomHandler extends AbstractGBRomHandler {
             int evoOffset = baseOffset + (idx) * 0x28;
             int evosWritten = 0;
             for (Evolution evo : pk.evolutionsFrom) {
-                writeWord(evoOffset, evo.type.toIndex(3));
+                writeWord(evoOffset, evo.type.toIndex(EvolutionDataVersion.GEN_3));
                 writeWord(evoOffset + 2, evo.extraInfo);
                 writeWord(evoOffset + 4, pokedexToInternal[evo.to.number]);
                 writeWord(evoOffset + 6, 0);

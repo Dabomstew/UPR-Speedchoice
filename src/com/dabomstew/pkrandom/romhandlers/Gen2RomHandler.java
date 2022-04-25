@@ -55,6 +55,7 @@ import com.dabomstew.pkrandom.exceptions.RandomizerIOException;
 import com.dabomstew.pkrandom.pokemon.Encounter;
 import com.dabomstew.pkrandom.pokemon.EncounterSet;
 import com.dabomstew.pkrandom.pokemon.Evolution;
+import com.dabomstew.pkrandom.pokemon.EvolutionDataVersion;
 import com.dabomstew.pkrandom.pokemon.EvolutionType;
 import com.dabomstew.pkrandom.pokemon.ExpCurve;
 import com.dabomstew.pkrandom.pokemon.FieldTM;
@@ -1339,7 +1340,7 @@ public class Gen2RomHandler extends AbstractGBCRomHandler {
             while (rom[realPointer] != 0) {
                 int method = rom[realPointer] & 0xFF;
                 int otherPoke = rom[realPointer + 2 + (method == 5 ? 1 : 0)] & 0xFF;
-                EvolutionType type = EvolutionType.fromIndex(2, method);
+                EvolutionType type = EvolutionType.fromIndex(EvolutionDataVersion.GEN_2, method);
                 int extraInfo = 0;
                 if (type == EvolutionType.TRADE) {
                     int itemNeeded = rom[realPointer + 1] & 0xFF;
@@ -2129,7 +2130,7 @@ public class Gen2RomHandler extends AbstractGBCRomHandler {
             } else {
                 for (Evolution evo : pokes[i].evolutionsFrom) {
                     // write evos
-                    dataBlock[offsetInData++] = (byte) evo.type.toIndex(2);
+                    dataBlock[offsetInData++] = (byte) evo.type.toIndex(EvolutionDataVersion.GEN_2);
                     if (evo.type == EvolutionType.LEVEL || evo.type == EvolutionType.STONE
                             || evo.type == EvolutionType.TRADE_ITEM) {
                         // simple types
